@@ -2,39 +2,60 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static stdOutHandler _printfStdOutHandlerPtr = 0;
 static void* _printfStdOutHandlerUserPtr = 0;
 
-int redirected_printf(const char * format, ...) {
-    // Make formatted string.
-    char* outstr = 0;
-    va_list ap;
-    va_start(ap, format);
-    int result = vasprintf(&outstr, format, ap);
-    va_end(ap);
-    if(result < 0) // Error occurred and `outstr` undefined if result < 0.
-        return result;
+static int redirected_vprintf(const char* tag, const char* format, va_list args)
+{
+    va_list copy;
+    va_copy(copy, args);
+#ifdef _MSC_VER
+    int length = _vscprintf(format, copy);
+#else
+    int length = vsnprintf(NULL, 0, format, copy);
+#endif
+    va_end(copy);
+    if (length < 0)
+        return length;
 
-    if(_printfStdOutHandlerPtr != 0)
+    const size_t prefixLength = tag ? strlen(tag) + 2 : 0;
+    const size_t capacity = prefixLength + (size_t)length + 1;
+    char localText[512];
+    char* text = capacity <= sizeof(localText) ? localText : (char*)malloc(capacity);
+    if (!text)
+        return -1;
+    if (tag)
     {
-        _printfStdOutHandlerPtr(outstr, _printfStdOutHandlerUserPtr);
+        memcpy(text, tag, prefixLength - 2);
+        text[prefixLength - 2] = ':';
+        text[prefixLength - 1] = ' ';
     }
-
-    free(outstr);
+    int result = vsnprintf(text + prefixLength, capacity - prefixLength, format, args);
+    if (result >= 0 && _printfStdOutHandlerPtr)
+        _printfStdOutHandlerPtr(text, _printfStdOutHandlerUserPtr);
+    if (text != localText)
+        free(text);
     return result;
 }
 
-void __android_log_print(int severity, const char* tag, const char* msg, ...) {
-    char *s;
-    if (asprintf(&s, "%s: %s", tag, msg) > 0 && s != 0)
-    {
-        if(_printfStdOutHandlerPtr != 0)
-        {
-            _printfStdOutHandlerPtr(s, _printfStdOutHandlerUserPtr);
-        }
-        free(s);
-    }
+int redirected_printf(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    int result = redirected_vprintf(NULL, format, args);
+    va_end(args);
+    return result;
+}
+
+void __android_log_print(int severity, const char* tag, const char* format, ...)
+{
+    (void)severity;
+    va_list args;
+    va_start(args, format);
+    redirected_vprintf(tag, format, args);
+    va_end(args);
 }
 
 void setPrintfStdOutHandler(stdOutHandler funcPtr, void* userData)

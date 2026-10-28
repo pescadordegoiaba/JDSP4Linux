@@ -33,6 +33,7 @@ public slots:
     std::vector<IOutputDevice> sinkDevices() override;
     std::vector<IOutputDevice> outputDevices() override;
     DspStatus status() override;
+    PlaybackClock playbackClock() const override;
 
 private:
     std::unique_ptr<PwPipelineManager> mgr;

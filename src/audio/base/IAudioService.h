@@ -14,6 +14,13 @@
 
 class DspConfig;
 
+struct PlaybackClock
+{
+    int rateHz = 0;
+    int quantum = 0;
+    float nodeLatencySeconds = -1.f;
+};
+
 class IAudioService : public QObject
 {
     Q_OBJECT
@@ -23,6 +30,8 @@ public:
     }
 
     virtual ~IAudioService() {}
+
+    virtual PlaybackClock playbackClock() const { return {}; }
 
 public slots:
     virtual void update(DspConfig* config) = 0;

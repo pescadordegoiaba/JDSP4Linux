@@ -146,6 +146,9 @@ double reverseProjectX(double pos, double MIN_FREQ, double MAX_FREQ)
 }
 void MultimodalEqualizerAxisInterpolation(JamesDSPLib *jdsp, int interpolationMode, int operatingMode, double *freqAx, double *gaindB)
 {
+	/* Shares coeffGen and the FFT state with MultimodalEqualizerEnable,
+	 * which the audio thread runs on a block-size change. */
+	jdsp_lock(jdsp);
 	memcpy(jdsp->mEQ.freq + 1, freqAx, NUMPTS * sizeof(double));
 	memcpy(jdsp->mEQ.gain + 1, gaindB, NUMPTS * sizeof(double));
 	for (int i = 0; i < NUMPTS; i++)
@@ -230,10 +233,12 @@ void MultimodalEqualizerAxisInterpolation(JamesDSPLib *jdsp, int interpolationMo
 	}
 	jdsp->mEQ.operatingMode = operatingMode;
 	jdsp->mEQ.currentInterpolationMode = interpolationMode;
+	jdsp_unlock(jdsp);
 }
 
 void MultimodalEqualizerEnable(JamesDSPLib *jdsp, char enable)
 {
+	jdsp_lock(jdsp);
 	if (jdsp->equalizerForceRefresh)
 	{
 		float *eqFil;
@@ -255,6 +260,7 @@ void MultimodalEqualizerEnable(JamesDSPLib *jdsp, char enable)
 	}
 	if (enable)
 		jdsp->equalizerEnabled = 1;
+	jdsp_unlock(jdsp);
 }
 void MultimodalEqualizerDisable(JamesDSPLib *jdsp)
 {

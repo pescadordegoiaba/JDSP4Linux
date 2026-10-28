@@ -474,10 +474,9 @@ public:
 
 // Spawn a function asynchronously
 template<typename Sched, typename Func>
-task<typename detail::remove_task<typename std::result_of<typename std::decay<Func>::type()>::type>::type> spawn(Sched& sched, Func&& f)
+task<typename detail::remove_task<typename std::invoke_result<typename std::decay<Func>::type>::type>::type> spawn(Sched& sched, Func&& f)
 {
-	// Using result_of in the function return type to work around bugs in the Intel
-	// C++ compiler.
+	// invoke_result replaces result_of, which C++20 removes.
 
 	// Make sure the function type is callable
 	typedef typename std::decay<Func>::type decay_func;

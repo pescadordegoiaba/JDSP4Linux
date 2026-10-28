@@ -5,8 +5,11 @@
 #include "ui_SettingsFragment.h"
 
 #include "config/AppConfig.h"
+#include "config/DspConfig.h"
 #include "data/AssetManager.h"
 #include "interface/dialog/PaletteEditor.h"
+#include "utils/HardwareProfile.h"
+#include "utils/VisualTheme.h"
 #include "interface/QMenuEditor.h"
 #include "interface/TrayIcon.h"
 #include "MainWindow.h"
@@ -70,12 +73,27 @@ SettingsFragment::SettingsFragment(TrayIcon *trayIcon,
     ui->paletteSelect->addItem("Honeycomb",  "honeycomb");
 	ui->paletteSelect->addItem("Green",      "green");
 	ui->paletteSelect->addItem("Stone",      "stone");
+    ui->paletteSelect->addItem("Dracula",    "dracula");
+    ui->paletteSelect->addItem("Nord",       "nord");
+    ui->paletteSelect->addItem("Gruvbox",    "gruvbox");
+    ui->paletteSelect->addItem("Tokyo Night","tokyonight");
+    ui->paletteSelect->addItem("Catppuccin", "catppuccin");
 	ui->paletteSelect->addItem("Custom",     "custom");
 
     for ( const auto& i : QStyleFactory::keys())
 	{
 		ui->themeSelect->addItem(i);
 	}
+    for (const auto &theme : VisualThemeProvider::definitions())
+    {
+        ui->visualThemeSelect->addItem(theme.name, theme.id);
+    }
+    for (const auto &profile : HardwareProfile::definitions())
+        ui->hardwareProfileSelect->addItem(profile.name, static_cast<int>(profile.id));
+    ui->hardwareProfileHelp->setTextFormat(Qt::PlainText);
+    ui->hardwareProfileHelp->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    ui->hardwareLatency->setTextFormat(Qt::PlainText);
+    ui->hardwareLatency->setTextInteractionFlags(Qt::TextSelectableByMouse);
 
     /*
      * Session signals
@@ -91,6 +109,7 @@ SettingsFragment::SettingsFragment(TrayIcon *trayIcon,
      * Interface signals
      */
     connect(ui->themeSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, &SettingsFragment::onThemeSelected);
+    connect(ui->visualThemeSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, &SettingsFragment::onVisualThemeSelected);
     connect(ui->paletteSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, &SettingsFragment::onPaletteSelected);
     connect(ui->paletteConfig, &QPushButton::clicked, _paletteEditor, &PaletteEditor::show);
     connect(ui->eq_alwaysdrawhandles, &QCheckBox::clicked, this, &SettingsFragment::onEqualizerHandlesToggled);
@@ -102,6 +121,8 @@ SettingsFragment::SettingsFragment(TrayIcon *trayIcon,
     connect(ui->benchmarkNow, &QPushButton::clicked, this, &SettingsFragment::onBenchmarkRunClicked);
     connect(ui->benchmarkClear, &QPushButton::clicked, this, &SettingsFragment::onBenchmarkClearClicked);
     connect(ui->sinkAllowVolumeControl, &QCheckBox::clicked, this, &SettingsFragment::onSinkAllowVolumeControlClicked);
+    connect(ui->hardwareProfileSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, &SettingsFragment::onHardwareProfileSelected);
+    connect(ui->hardwareProfileApply, &QPushButton::clicked, this, &SettingsFragment::onHardwareProfileApply);
     connect(_audioService, &IAudioService::benchmarkDone, this, [this]{ updateBenchmarkStatus(tr("benchmark data loaded")); });
 
 	/*
@@ -139,6 +160,7 @@ SettingsFragment::SettingsFragment(TrayIcon *trayIcon,
      * Refresh all input fields
      */
     refreshAll();
+    onHardwareProfileSelected(ui->hardwareProfileSelect->currentIndex());
 
 	/*
 	 * Check for systray availability
@@ -256,6 +278,13 @@ void SettingsFragment::refreshAll()
 		ui->paletteSelect->setCurrentIndex(index2);
 	}
 
+    QVariant qvVT(AppConfig::instance().get<QString>(AppConfig::VisualTheme));
+    int indexVT = ui->visualThemeSelect->findData(qvVT);
+    if (indexVT == -1)
+        indexVT = ui->visualThemeSelect->findData(VisualThemeProvider::defaultId());
+    if (indexVT != -1)
+        ui->visualThemeSelect->setCurrentIndex(indexVT);
+
     ui->paletteConfig->setEnabled(AppConfig::instance().get<QString>(AppConfig::ThemeColors) == "custom");
 
     ui->systray_r_none->setChecked(!AppConfig::instance().get<bool>(AppConfig::TrayIconEnabled));
@@ -283,6 +312,7 @@ void SettingsFragment::refreshAll()
         updateBenchmarkStatus(tr("benchmark data loaded"));
 
     refreshDevices();
+    refreshHardwareLatency();
 
     _lockslot = false;
 }
@@ -382,6 +412,14 @@ void SettingsFragment::onThemeSelected(int index)
     }
 
     AppConfig::instance().set(AppConfig::Theme, ui->themeSelect->itemText(index).toUtf8().constData());
+}
+
+void SettingsFragment::onVisualThemeSelected(int index)
+{
+    if (_lockslot)
+        return;
+
+    AppConfig::instance().set(AppConfig::VisualTheme, ui->visualThemeSelect->itemData(index).toString());
 }
 
 void SettingsFragment::onPaletteSelected(int index)
@@ -489,4 +527,67 @@ void SettingsFragment::setVisible(bool visible)
 {
     refreshAll();
     BaseFragment::setVisible(visible);
+}
+
+void SettingsFragment::refreshHardwareLatency()
+{
+    ui->hardwareLatency->setText(HardwareProfile::latencyText(_audioService));
+}
+
+void SettingsFragment::onHardwareProfileSelected(int index)
+{
+    if (_lockslot || index < 0)
+        return;
+
+    const auto id = static_cast<HardwareProfileId>(ui->hardwareProfileSelect->itemData(index).toInt());
+    QString description;
+    for (const auto &profile : HardwareProfile::definitions())
+    {
+        if (profile.id == id)
+        {
+            description = profile.description;
+            break;
+        }
+    }
+    ui->hardwareProfileHelp->setText(description);
+    ui->hardwareProfileStatus->setText(QStringLiteral("Trocar o perfil na lista não grava nada."));
+}
+
+void SettingsFragment::onHardwareProfileApply()
+{
+    if (_lockslot)
+        return;
+
+    const auto id = static_cast<HardwareProfileId>(ui->hardwareProfileSelect->currentData().toInt());
+    const HardwareProfilePlan planned = HardwareProfile::plan(id);
+    if (!planned.error.isEmpty())
+    {
+        ui->hardwareProfileStatus->setText(planned.error);
+        return;
+    }
+
+    if (planned.writesConfig)
+    {
+        QStringList lines;
+        for (const auto &change : planned.changes)
+            lines << QStringLiteral("%1=%2").arg(change.key, change.value);
+        lines << QStringLiteral("O equalizador gráfico salvo não entra nessa lista.");
+        lines << QStringLiteral("Aplicar grava só essas chaves no audio.conf.");
+
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Question);
+        box.setWindowTitle(QStringLiteral("Aplicar perfil"));
+        box.setText(lines.join(QLatin1Char('\n')));
+        box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        box.setDefaultButton(QMessageBox::No);
+        if (box.exec() != QMessageBox::Yes)
+        {
+            ui->hardwareProfileStatus->setText(QStringLiteral("Aplicação cancelada. Nada foi gravado."));
+            return;
+        }
+    }
+
+    const HardwareProfileResult result = HardwareProfile::apply(id);
+    ui->hardwareProfileStatus->setText(result.status);
+    refreshHardwareLatency();
 }

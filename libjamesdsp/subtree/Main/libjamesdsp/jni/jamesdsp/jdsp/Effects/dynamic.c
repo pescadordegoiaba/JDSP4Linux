@@ -10,8 +10,10 @@ void JLimiterSetCoefficients(JamesDSPLib *jdsp, double thresholddB, double msRel
 {
 	if (msRelease < 1.5)
 		msRelease = 1.5;
+	jdsp_lock(jdsp);
 	jdsp->limiter.relCoef = (float)exp(-1000.0 / (msRelease * round((double)jdsp->fs)));
 	jdsp->limiter.threshold = (float)pow(10.0, thresholddB / 20.0);
+	jdsp_unlock(jdsp);
 }
 void JLimiterInit(JamesDSPLib *jdsp)
 {
@@ -1601,20 +1603,33 @@ void CompressorDestructor(JamesDSPLib *jdsp)
 }
 void CompressorEnable(JamesDSPLib *jdsp, char enable)
 {
+	jdsp_lock(jdsp);
 	if (jdsp->compForceRefresh)
 	{
 		CompressorSetParam(jdsp, jdsp->comp.fgt_facT, jdsp->comp.granularity, jdsp->comp.tfresolution, 1);
-		CompressorSetGain(jdsp, 0, 0, 0);
+		/* SetParam bails out before FFTCompanderInit when fs or the time
+		 * constant is unusable. SetGain then divides by fftLen. */
+		if (jdsp->comp.fftLen > 0)
+			CompressorSetGain(jdsp, 0, 0, 0);
 	}
 	if (enable)
 		jdsp->compEnabled = 1;
+	jdsp_unlock(jdsp);
 }
 void CompressorDisable(JamesDSPLib *jdsp)
 {
+	jdsp_lock(jdsp);
 	jdsp->compEnabled = 0;
+	jdsp_unlock(jdsp);
 }
 void CompressorSetParam(JamesDSPLib *jdsp, float fgt_facT, int granularity, int tfresolution, char forceRefresh)
 {
+	jdsp_lock(jdsp);
+	if (!isfinite((double)fgt_facT) || fgt_facT <= 0.0f || !isfinite((double)jdsp->fs) || jdsp->fs <= 0.0f)
+	{
+		jdsp_unlock(jdsp);
+		return;
+	}
 	FFTCompander *cm = (FFTCompander *)(&jdsp->comp);
 	if ((fgt_facT != cm->fgt_facT || tfresolution != cm->tfresolution || granularity != cm->granularity) || forceRefresh)
 	{
@@ -1643,9 +1658,16 @@ void CompressorSetParam(JamesDSPLib *jdsp, float fgt_facT, int granularity, int 
 			cm->fgt_fac = (float)(1.0 - exp(-1.0 / (cm->fgt_facT * jdsp->fs)));
 		}
 	}
+	jdsp_unlock(jdsp);
 }
 void CompressorSetGain(JamesDSPLib *jdsp, double *freq, double *gains, char cpy)
 {
+	jdsp_lock(jdsp);
+	if (jdsp->comp.fftLen == 0)
+	{
+		jdsp_unlock(jdsp);
+		return;
+	}
 	FFTCompander *cm = (FFTCompander *)(&jdsp->comp);
 	if (cpy)
 	{
@@ -1726,10 +1748,19 @@ void CompressorSetGain(JamesDSPLib *jdsp, double *freq, double *gains, char cpy)
 			if (cm->headRoomdB < cm->DREmult[i] * 12.0f)
 				cm->headRoomdB = cm->DREmult[i] * 12.0f;
 	}
+	jdsp_unlock(jdsp);
 }
 void CompressorProcess(JamesDSPLib *jdsp, size_t n)
 {
 	FFTCompander *cm = (FFTCompander *)(&jdsp->comp);
+	/* Enable can mark the compander active before FFTCompanderInit.
+	 * fftLen and ovpLen are still zero, so the copy loop never advances,
+	 * and a null process pointer faults. Pass the block through until
+	 * SetParam fills them. Mode 3 never assigns process. */
+	if (cm->fftLen == 0 || cm->ovpLen == 0)
+		return;
+	if (cm->tfresolution < 3 && (cm->process == NULL || cm->mInputSamplesNeeded == 0))
+		return;
 	if (cm->tfresolution < 3)
 	{
 		unsigned int offset = 0;

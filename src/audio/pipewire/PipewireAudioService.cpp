@@ -9,6 +9,7 @@
 #include "Utils.h"
 
 #include <QDebug>
+#include <string>
 
 PipewireAudioService::PipewireAudioService() : IAudioService()
 {
@@ -191,5 +192,44 @@ std::vector<IOutputDevice> PipewireAudioService::outputDevices()
 DspStatus PipewireAudioService::status()
 {
     return plugin->status();
+}
+
+namespace {
+
+int parseClockInt(const std::string &text)
+{
+    if (text.empty())
+        return 0;
+    try
+    {
+        size_t used = 0;
+        const int value = std::stoi(text, &used);
+        return used == 0 ? 0 : value;
+    }
+    catch (...)
+    {
+        return 0;
+    }
+}
+
+}
+
+PlaybackClock PipewireAudioService::playbackClock() const
+{
+    PlaybackClock clock;
+    if (!mgr || mgr->thread_loop == nullptr)
+        return clock;
+
+    mgr->lock();
+    const int rate = parseClockInt(mgr->default_clock_rate);
+    const int quantum = parseClockInt(mgr->default_quantum);
+    const float nodeLatency = mgr->output_device.latency;
+    mgr->unlock();
+
+    clock.rateHz = rate;
+    clock.quantum = quantum;
+    if (nodeLatency > 0.f)
+        clock.nodeLatencySeconds = nodeLatency;
+    return clock;
 }
 

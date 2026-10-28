@@ -36,6 +36,9 @@ Linux port developed by <a href="https://github.com/thepbone">Tim Schneeberger (
 <p align="center">
     Feel free to join our <a href="https://t.me/joinchat/FTKC2A2bolHkFAyO-fuPjw">Telegram group</a> for support and updates
 </p>
+<p align="center">
+    This fork keeps the upstream tree and records its own changes in <a href="docs/fork-changes.md">docs/fork-changes.md</a>. The upstream project remains <a href="https://github.com/Audio4Linux/JDSP4Linux">Audio4Linux/JDSP4Linux</a>.
+</p>
 
 ____________
 

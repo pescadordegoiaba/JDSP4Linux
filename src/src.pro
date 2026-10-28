@@ -97,7 +97,9 @@ CONFIG += c++2a
         utils/AutoStartManager.h \
         utils/DesktopServices.h \
         utils/OverlayMsgProxy.h \
-        utils/StyleHelper.h
+        utils/StyleHelper.h \
+        utils/VisualTheme.h \
+        utils/HardwareProfile.h
 
     SOURCES += \
         interface/AnimatedJdspIcon.cpp \
@@ -126,7 +128,9 @@ CONFIG += c++2a
         utils/AutoStartManager.cpp \
         utils/DesktopServices.cpp \
         utils/OverlayMsgProxy.cpp \
-        utils/StyleHelper.cpp
+        utils/StyleHelper.cpp \
+        utils/VisualTheme.cpp \
+        utils/HardwareProfile.cpp
 
     FORMS += \
         interface/FileSelectionWidget.ui \

@@ -59,6 +59,7 @@ private slots:
     void onAutoStartToggled();
     void onSystrayToggled();
     void onThemeSelected(int index);
+    void onVisualThemeSelected(int index);
     void onPaletteSelected(int index);
     void onBlocklistInvertToggled(bool state);
     void onBlocklistClearClicked();
@@ -69,6 +70,8 @@ private slots:
     void onBenchmarkOnBootToggled();
     void onBenchmarkRunClicked();
     void onBenchmarkClearClicked();
+    void onHardwareProfileSelected(int index);
+    void onHardwareProfileApply();
     void onSinkAllowVolumeControlClicked();
     void onLiveprogAutoExtractToggled();
     void onGithubLinkClicked();
@@ -76,6 +79,7 @@ private slots:
     void onAppConfigUpdated(const AppConfig::Key &key, const QVariant &value);
 
     void updateBenchmarkStatus(const QString& message);
+    void refreshHardwareLatency();
 
 signals:
 	void launchSetupWizard();

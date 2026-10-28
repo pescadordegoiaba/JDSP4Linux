@@ -2,9 +2,11 @@
 
 #include "config/AppConfig.h"
 #include "MainWindow.h"
+#include "VisualTheme.h"
 #include <eeleditor.h>
 
 #include <QApplication>
+#include <QDebug>
 #include <QTextStream>
 
 StyleHelper::StyleHelper(QObject *host)
@@ -51,6 +53,7 @@ void StyleHelper::SetStyle()
 #endif
 	}
 
+    QString stylesheet;
     QFile f(":/styles/default.qss");
 
     if (!f.exists())
@@ -61,8 +64,23 @@ void StyleHelper::SetStyle()
     {
         f.open(QFile::ReadOnly | QFile::Text);
         QTextStream ts(&f);
-        qApp->setStyleSheet(ts.readAll());
+        stylesheet = ts.readAll();
     }
+
+    const auto visualTheme = VisualThemeProvider::definition(
+        AppConfig::instance().get<QString>(AppConfig::VisualTheme));
+    QFile themeFile(visualTheme.stylesheet);
+    if (themeFile.open(QFile::ReadOnly | QFile::Text))
+    {
+        QTextStream themeStream(&themeFile);
+        stylesheet += "\n" + themeStream.readAll();
+    }
+    else
+    {
+        qWarning() << "Unable to set visual theme stylesheet:" << visualTheme.id;
+    }
+
+    qApp->setStyleSheet(stylesheet);
 
 	emit styleChanged();
 }

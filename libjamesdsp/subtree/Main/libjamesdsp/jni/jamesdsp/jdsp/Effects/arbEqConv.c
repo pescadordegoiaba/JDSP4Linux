@@ -24,25 +24,29 @@ void ArbitraryResponseEqualizerDestructor(JamesDSPLib *jdsp)
 }
 void ArbitraryResponseEqualizerStringParser(JamesDSPLib *jdsp, char *stringEq)
 {
+	/* GetFilter and the impulse refresh share coeffGen with Enable.
+	 * Enable runs on the audio thread when the block size changes. */
+	jdsp_lock(jdsp);
 	ArbitraryEqString2SortedNodes(&jdsp->arbMag.instance.coeffGen, stringEq);
 	float *eqFil = jdsp->arbMag.instance.coeffGen.GetFilter(&jdsp->arbMag.instance.coeffGen, (float)jdsp->fs);
 	FFTConvolver2x2RefreshImpulseResponse(&jdsp->arbMag.instance.convState, &jdsp->arbMag.conv, eqFil, eqFil, jdsp->arbMag.instance.filterLen);
+	jdsp_unlock(jdsp);
 }
 void ArbitraryResponseEqualizerEnable(JamesDSPLib *jdsp, char enable)
 {
+	jdsp_lock(jdsp);
 	if (jdsp->arbMagForceRefresh)
 	{
 		float *eqFil = jdsp->arbMag.instance.coeffGen.GetFilter(&jdsp->arbMag.instance.coeffGen, (float)jdsp->fs);
-		jdsp_lock(jdsp);
 		FFTConvolver2x2Free(&jdsp->arbMag.instance.convState);
 		FFTConvolver2x2Free(&jdsp->arbMag.conv);
 		FFTConvolver2x2LoadImpulseResponse(&jdsp->arbMag.instance.convState, (unsigned int)jdsp->blockSize, eqFil, eqFil, jdsp->arbMag.instance.filterLen);
 		FFTConvolver2x2LoadImpulseResponse(&jdsp->arbMag.conv, (unsigned int)jdsp->blockSize, eqFil, eqFil, jdsp->arbMag.instance.filterLen);
-		jdsp_unlock(jdsp);
 		jdsp->arbMagForceRefresh = 0;
 	}
 	if (enable)
 		jdsp->arbitraryMagEnabled = 1;
+	jdsp_unlock(jdsp);
 }
 void ArbitraryResponseEqualizerDisable(JamesDSPLib *jdsp)
 {

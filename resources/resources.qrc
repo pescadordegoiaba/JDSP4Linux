@@ -31,6 +31,9 @@
         <file>assets/liveprog/firlsProc.eel</file>
         <file>assets/liveprog/fractionalDelayline.eel</file>
         <file>assets/liveprog/gainControl.eel</file>
+        <file>assets/liveprog/channelBalance.eel</file>
+        <file>assets/liveprog/highpass70Hz.eel</file>
+        <file>assets/liveprog/ep2220Line.eel</file>
         <file>assets/liveprog/hadamVerb.eel</file>
         <file>assets/liveprog/phaseshifter.eel</file>
         <file>assets/liveprog/stereowide.eel</file>
@@ -40,9 +43,17 @@
         <file>assets/DDCData.json</file>
         <file>styles/default.qss</file>
         <file>styles/overlay.qss</file>
+        <file>styles/themes/classic.qss</file>
+        <file>styles/themes/studio.qss</file>
+        <file>styles/themes/midnight.qss</file>
+        <file>styles/themes/paper.qss</file>
+        <file>styles/themes/highcontrast.qss</file>
         <file>icons/power.svg</file>
         <file>icons/power-white.svg</file>
         <file>assets/default.conf</file>
+        <file>profiles/vt1705.conf</file>
+        <file>profiles/ep2220.conf</file>
+        <file>profiles/hdmi.conf</file>
         <file>icons/error.svg</file>
         <file>assets/liveprog/downmixer.eel</file>
         <file>assets/liveprog/fftConvolution2x4x2.eel</file>
@@ -58,6 +69,7 @@
         <file>assets/irs/CorredHRTF_Crossfeed.wav</file>
         <file>assets/irs/CorredHRTF_Surround1.wav</file>
         <file>assets/irs/CorredHRTF_Surround2.wav</file>
+        <file>assets/irs/CorredHRTF_Surround2_Wet64.wav</file>
         <file>assets/irs/SwapChannels.wav</file>
         <file>assets/vdc/Butterworth.vdc</file>
         <file>assets/vdc/FrontRearContrast.vdc</file>

@@ -3,9 +3,12 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#include <sys/time.h>
 #include <float.h>
+#include <locale.h>
+#ifndef _WIN32
+#include <sys/time.h>
 #include <unistd.h>
+#endif
 #include "Effects/eel2/dr_flac.h"
 #include "Effects/eel2/ns-eel.h"
 #include "jdsp_header.h"
@@ -248,6 +251,9 @@ unsigned int next_pow_2(unsigned int x)
 }
 void JamesDSPReallocateBlock(JamesDSPLib *jdsp, size_t n)
 {
+	/* tmpBuffer is read by the audio thread. A recursive lock lets a caller
+	 * that already holds m_in_processing replace it without a second owner. */
+	jdsp_lock(jdsp);
 	// Init buffer
 	float *tmp1 = jdsp->tmpBuffer[0];
 	float *tmp2 = jdsp->tmpBuffer[1];
@@ -273,6 +279,7 @@ void JamesDSPReallocateBlock(JamesDSPLib *jdsp, size_t n)
 	jdsp->tmpBuffer[5] = jdsp->tmpBuffer[4] + jdsp->pw2BlockMemSize;
 	if (tmp1)
 		free(tmp1);
+	jdsp_unlock(jdsp);
 }
 void JamesDSPRefreshConvolutions(JamesDSPLib *jdsp, char refreshAll)
 {
@@ -284,6 +291,11 @@ void JamesDSPRefreshConvolutions(JamesDSPLib *jdsp, char refreshAll)
         return;
     }
 
+	/* The first PipeWire block changes the size on the realtime thread
+	 * while the GUI thread refreshes the same FFT convolvers. Hold the
+	 * processing lock for the whole rebuild. CrossfeedEnable and the
+	 * equalizer enables lock the same recursive mutex. */
+	jdsp_lock(jdsp);
 #ifdef DEBUG
 	__android_log_print(ANDROID_LOG_INFO, TAG, "Buffer size changed, update convolution object to maximize performance");
 #endif
@@ -298,6 +310,7 @@ void JamesDSPRefreshConvolutions(JamesDSPLib *jdsp, char refreshAll)
 		jdsp->equalizerForceRefresh = 1;
 		MultimodalEqualizerEnable(jdsp, jdsp->equalizerEnabled);
 	}
+	jdsp_unlock(jdsp);
 }
 void jdsp_lock(JamesDSPLib *jdsp)
 {
@@ -312,6 +325,11 @@ void jdsp_unlock(JamesDSPLib *jdsp)
 // Process
 void JamesDSPProcess(JamesDSPLib *jdsp, size_t n)
 {
+	/* Hold the processing lock for the whole block. Effect setters take the
+	 * same recursive mutex, so a parameter change cannot free or rebuild FFT
+	 * state while this thread is reading it. The inner lock below stays: it
+	 * is the same mutex and only drops one recursion level. */
+	jdsp_lock(jdsp);
 	// Analog modelling
 	if (jdsp->tubeEnabled)
 		VacuumTubeProcess(jdsp, n);
@@ -368,9 +386,11 @@ void JamesDSPProcess(JamesDSPLib *jdsp, size_t n)
 		jdsp->tmpBuffer[0][i] = rect1;
 		jdsp->tmpBuffer[1][i] = rect2;
 	}
+	jdsp_unlock(jdsp);
 }
 void JamesDSPProcessCheckBenchmarkReady(JamesDSPLib *jdsp, size_t n)
 {
+	jdsp_lock(jdsp);
 	// Analog modelling
 	if (jdsp->tubeEnabled)
 		VacuumTubeProcess(jdsp, n);
@@ -435,6 +455,7 @@ void JamesDSPProcessCheckBenchmarkReady(JamesDSPLib *jdsp, size_t n)
 		JamesDSPRefreshConvolutions(jdsp, 0);
 		jdsp->processInternal = JamesDSPProcess;
 	}
+	jdsp_unlock(jdsp);
 }
 size_t iabs(size_t value)
 {
@@ -1048,11 +1069,31 @@ void JamesDSPInit(JamesDSPLib *jdsp, int n, float sample_rate)
 		jdsp->i32_from_p24 = i32_from_p24_big_endian;
 		jdsp->p24_from_i32 = p24_from_i32_big_endian;
 	}
-	//
+	/* Recursive: JamesDSPSetSampleRate already holds this lock and then calls
+	 * CrossfeedEnable / CompressorEnable, which lock again. A normal mutex
+	 * deadlocks that path on Linux. Windows CRITICAL_SECTION is recursive. */
+#ifndef _WIN32
+	{
+		pthread_mutexattr_t attr;
+		int attrOk = pthread_mutexattr_init(&attr) == 0;
+		if (!attrOk ||
+			pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE) != 0 ||
+			pthread_mutex_init(&jdsp->m_in_processing, &attr) != 0)
+			jdsp->isMutexSuccess = 0;
+		else
+			jdsp->isMutexSuccess = 1;
+		if (attrOk)
+			pthread_mutexattr_destroy(&attr);
+	}
+#else
 	if (pthread_mutex_init(&jdsp->m_in_processing, NULL) != 0)
 		jdsp->isMutexSuccess = 0;
 	else
 		jdsp->isMutexSuccess = 1;
+#endif
+	/* Decimal parsing inside the library must not depend on the process locale.
+	 * The GUI also sets this, but GStreamer and other callers do not. */
+	setlocale(LC_NUMERIC, "C");
 	// Init buffer
 	jdsp->blockSize = n;
 	jdsp->blockSizeMax = n;
@@ -1155,7 +1196,9 @@ void JamesDSPSetPostGain(JamesDSPLib *jdsp, double pGaindB)
 		pGaindB = -15.0f;
 	if (pGaindB > 15.0f)
 		pGaindB = 15.0f;
+	jdsp_lock(jdsp);
 	jdsp->postGain = db2magf(pGaindB);
+	jdsp_unlock(jdsp);
 }
 int JamesDSPGetMutexStatus(JamesDSPLib *jdsp)
 {
@@ -1254,12 +1297,17 @@ void JamesDSPFree(JamesDSPLib *jdsp)
 	}
 	if (jdsp->impulseResponseStorage.impulseResponse)
 		free(jdsp->impulseResponseStorage.impulseResponse);
-	if (jdsp->isMutexSuccess)
-		pthread_mutex_destroy(&jdsp->m_in_processing);
 	if (jdsp->enableASRC)
 	{
 		FreeIntegerASRCHandler(&jdsp->asrc[0]);
 		FreeIntegerASRCHandler(&jdsp->asrc[1]);
 	}
 	jdsp_unlock(jdsp);
+	/* Destroy only after the unlock. Destroying a mutex that this thread
+	 * still owns, then unlocking it, is undefined. */
+	if (jdsp->isMutexSuccess)
+	{
+		pthread_mutex_destroy(&jdsp->m_in_processing);
+		jdsp->isMutexSuccess = 0;
+	}
 }

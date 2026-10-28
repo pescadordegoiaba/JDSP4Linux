@@ -1,0 +1,113 @@
+desc: EP-2220 line cabinet (VT1705 green jack)
+author: hardware profile
+
+monoHz:100<90,140,1>Mono crossover
+protectHz:70<40,80,1>Driver high-pass
+
+@init
+monoHz = 100;
+protectHz = 70;
+
+function Biquad_SetLowpass(frequency)(
+    q = 0.7071067811865476;
+    w = (frequency * 2 * $PI) / srate;
+    sinW = sin(w);
+    cosW = cos(w);
+    alpha = sinW / (2 * q);
+    _a0 = 1 + alpha;
+    _a1 = -2 * cosW;
+    _a2 = 1 - alpha;
+    _b0 = (1 - cosW) * 0.5;
+    _b1 = 1 - cosW;
+    _b2 = _b0;
+    this.b0 = _b0 / _a0;
+    this.b1 = _b1 / _a0;
+    this.b2 = _b2 / _a0;
+    this.a1 = -_a1 / _a0;
+    this.a2 = -_a2 / _a0;
+    this.x1 = 0;
+    this.x2 = 0;
+    this.y1 = 0;
+    this.y2 = 0;
+);
+
+function Biquad_SetHighpass(frequency q)(
+    w = (frequency * 2 * $PI) / srate;
+    sinW = sin(w);
+    cosW = cos(w);
+    alpha = sinW / (2 * q);
+    _a0 = 1 + alpha;
+    _a1 = -2 * cosW;
+    _a2 = 1 - alpha;
+    _b0 = (1 + cosW) * 0.5;
+    _b1 = -(1 + cosW);
+    _b2 = _b0;
+    this.b0 = _b0 / _a0;
+    this.b1 = _b1 / _a0;
+    this.b2 = _b2 / _a0;
+    this.a1 = -_a1 / _a0;
+    this.a2 = -_a2 / _a0;
+    this.x1 = 0;
+    this.x2 = 0;
+    this.y1 = 0;
+    this.y2 = 0;
+);
+
+function Biquad_Process(sample)(
+    out = sample * this.b0 + this.x1 * this.b1 + this.x2 * this.b2 + this.y1 * this.a1 + this.y2 * this.a2;
+    this.x2 = this.x1;
+    this.x1 = sample;
+    this.y2 = this.y1;
+    this.y1 = out;
+    out;
+);
+
+function Dc_Set(fc)(
+    this.R = exp(-2 * $PI * fc / srate);
+    this.x1 = 0;
+    this.y1 = 0;
+);
+
+function Dc_Process(sample)(
+    y = sample - this.x1 + this.R * this.y1;
+    this.x1 = sample;
+    this.y1 = y;
+    y;
+);
+
+dcL.Dc_Set(5);
+dcR.Dc_Set(5);
+prot1L.Biquad_SetHighpass(protectHz, 0.541196100146197);
+prot2L.Biquad_SetHighpass(protectHz, 1.306562964876376);
+prot1R.Biquad_SetHighpass(protectHz, 0.541196100146197);
+prot2R.Biquad_SetHighpass(protectHz, 1.306562964876376);
+low1L.Biquad_SetLowpass(monoHz);
+low2L.Biquad_SetLowpass(monoHz);
+low1R.Biquad_SetLowpass(monoHz);
+low2R.Biquad_SetLowpass(monoHz);
+high1L.Biquad_SetHighpass(monoHz, 0.7071067811865476);
+high2L.Biquad_SetHighpass(monoHz, 0.7071067811865476);
+high1R.Biquad_SetHighpass(monoHz, 0.7071067811865476);
+high2R.Biquad_SetHighpass(monoHz, 0.7071067811865476);
+
+@sample
+t = dcL.Dc_Process(spl0);
+t = prot1L.Biquad_Process(t);
+inL = prot2L.Biquad_Process(t);
+t = dcR.Dc_Process(spl1);
+t = prot1R.Biquad_Process(t);
+inR = prot2R.Biquad_Process(t);
+
+t = low1L.Biquad_Process(inL);
+lowL = low2L.Biquad_Process(t);
+t = low1R.Biquad_Process(inR);
+lowR = low2R.Biquad_Process(t);
+
+t = high1L.Biquad_Process(inL);
+highL = high2L.Biquad_Process(t);
+t = high1R.Biquad_Process(inR);
+highR = high2R.Biquad_Process(t);
+
+mono = (lowL + lowR) * 0.5;
+spl0 = highL + mono;
+spl1 = highR + mono;
