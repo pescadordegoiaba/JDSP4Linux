@@ -77,12 +77,13 @@ O que a biblioteca passou a fazer:
 
 Nos modos de 15 e 31 bandas a coluna de frequência fica travada. A linha entre esses pontos é interpolação de decibéis em frequência logarítmica. 24 Hz, 25 Hz e 77,2 Hz não eram uma segunda lista de pontos. Para colocar um desses valores na lista, a barra lateral do equalizador gráfico, acima do AutoEQ, ganhou o botão com o texto `add frequencie`.
 
-O campo aceita de 1 Hz a 30000 Hz, com uma casa decimal, e abre em 1000 Hz. Cancelar não muda nada. Confirmar faz o seguinte:
+O campo é texto e abre em 1000. Aceita `77.2` e `77,2`. Cancelar não muda nada. Um valor fora de 1 Hz a 30000 Hz também não muda nada. Confirmar faz o seguinte:
 
 1. Se o modo não for o variável, passa para variável. Os pontos que já existem continuam, e a coluna de hertz fica editável.
-2. Uma frequência a menos de 0,05 Hz de um ponto existente só seleciona essa linha. Dois pontos na mesma frequência fazem a interpolação logarítmica dividir por zero.
-3. Nos outros casos o ponto entra na ordem de frequência. O ganho é o da curva naquele hertz, arredondado em 0,01 dB, então a curva não salta.
-4. A linha fica selecionada. Hertz e decibéis se editam como qualquer outro ponto do modo variável.
+2. A frequência digitada entra como um ponto novo. A frequência e o ganho de cada ponto que já estava na lista são copiados sem alteração.
+3. A lista inteira é ordenada da menor frequência para a maior, e a tabela é refeita nessa ordem.
+4. Uma frequência a menos de 0,05 Hz de um ponto existente só seleciona essa linha e não troca o número. Dois pontos na mesma frequência fazem a interpolação logarítmica dividir por zero.
+5. O ganho do ponto novo é o da curva naquele hertz, arredondado em 0,01 dB, então a curva não salta. A linha fica selecionada. Hertz e decibéis se editam como qualquer outro ponto do modo variável.
 
 O FIR do equalizador arbitrário tem 8192 pontos. A 48000 Hz a grade fica em cerca de 2,9 Hz. 24 Hz e 25 Hz caem em bins diferentes. 77,0 Hz e 77,2 Hz caem no mesmo bin. A cópia deste widget usada pelo compander esconde a barra lateral, então o botão não aparece ali.
 

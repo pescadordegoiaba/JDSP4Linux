@@ -82,12 +82,13 @@ The HDA power-save click is not changed from the application. A machine that cli
 
 On the graphic EQ sidebar, above AutoEQ, the button is labeled `add frequencie`.
 
-The 15-band and 31-band modes lock the frequency column. The line between those points is log-frequency interpolation of decibels, not a second set of editable points. The button opens a numeric field from 1 Hz to 30000 Hz with one decimal place, starting at 1000 Hz. Cancel changes nothing. Accept does this:
+The 15-band and 31-band modes lock the frequency column. The line between those points is log-frequency interpolation of decibels, not a second set of editable points. The button opens a text field, starting at 1000. `77.2` and `77,2` are both accepted. Cancel changes nothing. A value outside 1 Hz to 30000 Hz changes nothing. Accept does this:
 
 1. If the mode is not variable, it switches to variable. The existing points stay, and the frequency column becomes editable.
-2. A frequency within 0.05 Hz of an existing point selects that row. Two points on the same frequency make the log interpolation divide by zero.
-3. Otherwise the new point is inserted in frequency order. Its gain is the current curve at that frequency, rounded to 0.01 dB, so the curve does not jump.
-4. The row is selected. Hertz and decibels are then edited like any other variable-mode point.
+2. The typed frequency is appended as its own point. Every frequency and gain that was already in the list is copied unchanged.
+3. The whole list is sorted from the lowest frequency to the highest and the table is rebuilt in that order.
+4. A frequency within 0.05 Hz of an existing point selects that row and does not change its number. Two points on the same frequency make the log interpolation divide by zero.
+5. The new point's gain is the current curve at that frequency, rounded to 0.01 dB, so the curve does not jump. The row is selected. Hertz and decibels are then edited like any other variable-mode point.
 
 The FIR used by the arbitrary equalizer is 8192 points. At 48000 Hz the grid is about 2.9 Hz. 24 Hz and 25 Hz land in different bins. 77.0 Hz and 77.2 Hz land in the same bin.
 
